@@ -1,0 +1,811 @@
+<!DOCTYPE html>
+
+
+
+  
+
+
+<html class="theme-next gemini use-motion" lang="zh-Hans">
+<head>
+  <meta charset="UTF-8"/>
+<meta http-equiv="X-UA-Compatible" content="IE=edge" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1"/>
+<meta name="theme-color" content="#222">
+
+
+
+
+
+
+
+
+
+<meta http-equiv="Cache-Control" content="no-transform" />
+<meta http-equiv="Cache-Control" content="no-siteapp" />
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+  
+  <link href="/lib/fancybox/source/jquery.fancybox.css?v=2.1.5" rel="stylesheet" type="text/css" />
+
+
+
+
+
+
+
+<link href="/lib/font-awesome/css/font-awesome.min.css?v=4.6.2" rel="stylesheet" type="text/css" />
+
+<link href="/css/main.css?v=5.1.4" rel="stylesheet" type="text/css" />
+
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png?v=5.1.4">
+
+
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png?v=5.1.4">
+
+
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png?v=5.1.4">
+
+
+  <link rel="mask-icon" href="/images/logo.svg?v=5.1.4" color="#222">
+
+
+
+
+
+  <meta name="keywords" content="Netty,NIO,IO," />
+
+
+
+
+
+
+
+
+
+
+<meta name="description" content="IO基础Linux IO模型 阻塞IO模型阻塞IO模型是最常用的IO模型，默认所有文件操作都是阻塞的。以套接字接口为例，在进程空间中调用recvfrom，系统调用会直到数据包到达且被赋值到应用进程的缓冲区中或者发生错误时才返回，此期间内会一直等待，进程从调用recvfrom开始到它返回的时间段内都是被阻塞的。 非阻塞IO模型recvfrom从应用层到内核的时候，如果缓冲区内没有数据，就直接返回EW">
+<meta name="keywords" content="Netty,NIO,IO">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Netty指南——Java IO演变">
+<meta property="og:url" content="http://yoursite.com/2018/04/15/Netty指南——Java_IO演变/index.html">
+<meta property="og:site_name" content="十月的喜悦">
+<meta property="og:description" content="IO基础Linux IO模型 阻塞IO模型阻塞IO模型是最常用的IO模型，默认所有文件操作都是阻塞的。以套接字接口为例，在进程空间中调用recvfrom，系统调用会直到数据包到达且被赋值到应用进程的缓冲区中或者发生错误时才返回，此期间内会一直等待，进程从调用recvfrom开始到它返回的时间段内都是被阻塞的。 非阻塞IO模型recvfrom从应用层到内核的时候，如果缓冲区内没有数据，就直接返回EW">
+<meta property="og:locale" content="zh-Hans">
+<meta property="og:updated_time" content="2018-04-14T16:43:49.210Z">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="Netty指南——Java IO演变">
+<meta name="twitter:description" content="IO基础Linux IO模型 阻塞IO模型阻塞IO模型是最常用的IO模型，默认所有文件操作都是阻塞的。以套接字接口为例，在进程空间中调用recvfrom，系统调用会直到数据包到达且被赋值到应用进程的缓冲区中或者发生错误时才返回，此期间内会一直等待，进程从调用recvfrom开始到它返回的时间段内都是被阻塞的。 非阻塞IO模型recvfrom从应用层到内核的时候，如果缓冲区内没有数据，就直接返回EW">
+
+
+
+<script type="text/javascript" id="hexo.configurations">
+  var NexT = window.NexT || {};
+  var CONFIG = {
+    root: '/',
+    scheme: 'Gemini',
+    version: '5.1.4',
+    sidebar: {"position":"left","display":"post","offset":12,"b2t":false,"scrollpercent":false,"onmobile":false},
+    fancybox: true,
+    tabs: true,
+    motion: {"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}},
+    duoshuo: {
+      userId: '0',
+      author: '博主'
+    },
+    algolia: {
+      applicationID: '',
+      apiKey: '',
+      indexName: '',
+      hits: {"per_page":10},
+      labels: {"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}
+    }
+  };
+</script>
+
+
+
+  <link rel="canonical" href="http://yoursite.com/2018/04/15/Netty指南——Java_IO演变/"/>
+
+
+
+
+
+  <title>Netty指南——Java IO演变 | 十月的喜悦</title>
+  
+
+
+
+
+
+  <script type="text/javascript">
+    var _hmt = _hmt || [];
+    (function() {
+      var hm = document.createElement("script");
+      hm.src = "https://hm.baidu.com/hm.js?378393a1899032f50bd847dbd229b2dd";
+      var s = document.getElementsByTagName("script")[0];
+      s.parentNode.insertBefore(hm, s);
+    })();
+  </script>
+
+
+
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" lang="zh-Hans">
+
+  
+  
+    
+  
+
+  <div class="container sidebar-position-left page-post-detail">
+    <div class="headband"></div>
+
+    <header id="header" class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-wrapper">
+  <div class="site-meta ">
+    
+
+    <div class="custom-logo-site-title">
+      <a href="/"  class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">十月的喜悦</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+      
+        <p class="site-subtitle">不积蹞步，无以至千里；不积小流，无以成江海。</p>
+      
+  </div>
+
+  <div class="site-nav-toggle">
+    <button>
+      <span class="btn-bar"></span>
+      <span class="btn-bar"></span>
+      <span class="btn-bar"></span>
+    </button>
+  </div>
+</div>
+
+<nav class="site-nav">
+  
+
+  
+    <ul id="menu" class="menu">
+      
+        
+        <li class="menu-item menu-item-home">
+          <a href="/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-home"></i> <br />
+            
+            首页
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-tags">
+          <a href="/tags/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-tags"></i> <br />
+            
+            标签
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-categories">
+          <a href="/categories/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-th"></i> <br />
+            
+            分类
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-archives">
+          <a href="/archives/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-archive"></i> <br />
+            
+            归档
+          </a>
+        </li>
+      
+
+      
+    </ul>
+  
+
+  
+</nav>
+
+
+
+ </div>
+    </header>
+
+    <main id="main" class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          <div id="content" class="content">
+            
+
+  <div id="posts" class="posts-expand">
+    
+
+  
+
+  
+  
+  
+
+  <article class="post post-type-normal" itemscope itemtype="http://schema.org/Article">
+  
+  
+  
+  <div class="post-block">
+    <link itemprop="mainEntityOfPage" href="http://yoursite.com/2018/04/15/Netty指南——Java_IO演变/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="name" content="白十">
+      <meta itemprop="description" content="">
+      <meta itemprop="image" content="/images/avatar.gif">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="十月的喜悦">
+    </span>
+
+    
+      <header class="post-header">
+
+        
+        
+          <h1 class="post-title" itemprop="name headline">Netty指南——Java IO演变</h1>
+        
+
+        <div class="post-meta">
+	  
+          <span class="post-time">
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">发表于</span>
+              
+              <time title="创建于" itemprop="dateCreated datePublished" datetime="2018-04-15T00:10:05+00:00">
+                2018-04-15
+              </time>
+            
+
+            
+
+            
+          </span>
+
+          
+            <span class="post-category" >
+            
+              <span class="post-meta-divider">|</span>
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">分类于</span>
+              
+              
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/NIO/" itemprop="url" rel="index">
+                    <span itemprop="name">NIO</span>
+                  </a>
+                </span>
+
+                
+                
+              
+            </span>
+          
+
+          
+            
+          
+
+          
+          
+
+          
+
+          
+
+          
+
+        </div>
+      </header>
+    
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+      
+
+      
+        <h1 id="IO基础"><a href="#IO基础" class="headerlink" title="IO基础"></a>IO基础</h1><h2 id="Linux-IO模型"><a href="#Linux-IO模型" class="headerlink" title="Linux IO模型"></a>Linux IO模型</h2><ol>
+<li>阻塞IO模型<br>阻塞IO模型是最常用的IO模型，默认所有文件操作都是阻塞的。以套接字接口为例，在进程空间中调用recvfrom，系统调用会直到数据包到达且被赋值到应用进程的缓冲区中或者发生错误时才返回，此期间内会一直等待，进程从调用recvfrom开始到它返回的时间段内都是被阻塞的。</li>
+<li>非阻塞IO模型<br>recvfrom从应用层到内核的时候，如果缓冲区内没有数据，就直接返回EWOULDBLOCK错误，一般都对非阻塞IO模型进行轮训检查这个状态，用以判断内核是不是有数据返回。</li>
+<li>IO复用模型<br>Linux提供select/poll，进程通过将一个或多个fd传递个select或者poll系统调用，阻塞在select操作上，这样select/poll可以侦测多个fd是否处于就绪状态。它们是顺序扫描fd是否就绪，而且支持的fd数量有限，因此使用收到制约。Linux还提供epoll系统调用，epoll基于事件驱动方式代替顺序扫描，当有fd就绪时，立即回调函数rollback，因此性能更高。</li>
+<li>信号驱动IO模型<br>首先开启套接口信号驱动IO功能，并通过系统调用sigaction执行一个信号处理函数，调用后立即返回，进程继续工作，因此它是非阻塞的。当数据准备就绪时，就为该进程生成一个SIGIO信号，通过信号回调通知应用程序调用recvfrom来读取数据，并通知主循环函数处理数据。</li>
+<li>异步IO<br>告知内核启动某个操作，并让内核在整个操作完成后通知我们（包括将数据从内核复制到用户自己的缓冲区）。它与信号驱动模型的主要区别在于信号驱动IO由内核通知我们何时可以开始一个IO操作，而异步IO由内核通知我们IO操作合适已经完成。</li>
+</ol>
+<p>我们只需要了解上述5中IO模型的概念即可，知道对于操作系统而言，底层是支持IO异步通信的。</p>
+<h2 id="IO多路复用"><a href="#IO多路复用" class="headerlink" title="IO多路复用"></a>IO多路复用</h2><p>当需要同时处理多个请求时，可以利用多线程或者IO多路复用技术。IO多路复用技术是通过把多个IO的阻塞复用到同一个select的阻塞上，从而使系统在单线程情况下也可以同时处理多个请求。与多线程对比，IO多路复用的最大优势就是开销更小，系统不需要创建新的额外进程或者线程，更不需要去维护这些进程和线程，节省了系统资源。<br>主要应用场景：</p>
+<ul>
+<li>需要同时处理多个处于监听状态或者多个连接状态的套接字</li>
+<li>需要同时处理多种网络协议的套接字</li>
+</ul>
+<p>目前支持IO多路复用的系统调用有select、pselect、poll、epoll。Linux起初使用select做轮训和网络时间通知，但它存在一定缺陷，后来在新内核版本中改用epoll。epoll相比select做了改进。</p>
+<ol>
+<li>支持一个进程打开的socket描述符（fd）不受限制（仅首先与操作系统的最大文件句柄数）</li>
+<li>IO效率不会随着fd数量的增加而线性下降</li>
+<li>使用mmap加速内核与用户空间的消息传递</li>
+<li>epoll的api更简单</li>
+</ol>
+<h1 id="Java-IO演变"><a href="#Java-IO演变" class="headerlink" title="Java IO演变"></a>Java IO演变</h1><p>在1.4前，所有Java Socket通信都采用了同步阻塞模式（BIO），虽然这种模式简化了开发，但是性能和可靠性极差。从1.4开始，Java提供了新的NIO库，开始支持非阻塞IO。NIO库在java.nio包中，提供了异步IO开发的API和类库，主要包括：</p>
+<ol>
+<li>缓冲区ByteBuffer等</li>
+<li>管道Pipe</li>
+<li>异步或同步Channel</li>
+<li>多种字符集的编码、解码能力</li>
+<li>多路复用器selector</li>
+<li>基于Perl实现的正则表达式库</li>
+<li>文件通道FileChannel</li>
+</ol>
+<p>虽然新的NIO库支持了异步非阻塞编程，但还是存在一些不足：</p>
+<ol>
+<li>没有统一的文件属性，比如读写权限</li>
+<li>API能力弱，比如目录的级联创建和遍历需要自己实现</li>
+<li>底层存储系统的一些高级API无法使用</li>
+<li>所有文件操作还是同步阻塞调用，不支持异步文件读写</li>
+</ol>
+<p>JDK 1.7的到来，帮我们进一步优化了NIO库，新的库被称为NIO 2.0，主要提供了3方面升级:</p>
+<ol>
+<li>能够批量获取文件属性</li>
+<li>提供了标准文件系统的SPI，供各服务商自行实现</li>
+<li>提供AIO功能，支持基于文件的异步IO操作和针对网络套接字的异步操作</li>
+<li>支持配置和多播数据报等</li>
+</ol>
+
+      
+    </div>
+    
+    
+    
+
+    
+      <div>
+        <div id="wechat_subscriber" style="display: block; padding: 10px 0; margin: 20px auto; width: 100%; text-align: center">
+    <img id="wechat_subscriber_qcode" src="/uploads/wechat-qcode.jpg" alt="白十 wechat" style="width: 200px; max-width: 100%;"/>
+    <div>欢迎订阅我的微信公众号！</div>
+</div>
+
+      </div>
+    
+
+    
+
+    
+
+    <footer class="post-footer">
+      
+        <div class="post-tags">
+          
+            <a href="/tags/Netty/" rel="tag"># Netty</a>
+          
+            <a href="/tags/NIO/" rel="tag"># NIO</a>
+          
+            <a href="/tags/IO/" rel="tag"># IO</a>
+          
+        </div>
+      
+
+      
+      
+      
+
+      
+        <div class="post-nav">
+          <div class="post-nav-next post-nav-item">
+            
+              <a href="/2018/04/14/Netty指南/" rel="next" title="Netty指南">
+                <i class="fa fa-chevron-left"></i> Netty指南
+              </a>
+            
+          </div>
+
+          <span class="post-nav-divider"></span>
+
+          <div class="post-nav-prev post-nav-item">
+            
+          </div>
+        </div>
+      
+
+      
+      
+    </footer>
+  </div>
+  
+  
+  
+  </article>
+
+
+
+    <div class="post-spread">
+      
+    </div>
+  </div>
+
+
+          </div>
+          
+
+
+          
+
+  
+
+
+
+        </div>
+        
+          
+  
+  <div class="sidebar-toggle">
+    <div class="sidebar-toggle-line-wrap">
+      <span class="sidebar-toggle-line sidebar-toggle-line-first"></span>
+      <span class="sidebar-toggle-line sidebar-toggle-line-middle"></span>
+      <span class="sidebar-toggle-line sidebar-toggle-line-last"></span>
+    </div>
+  </div>
+
+  <aside id="sidebar" class="sidebar">
+    
+    <div class="sidebar-inner">
+
+      
+
+      
+        <ul class="sidebar-nav motion-element">
+          <li class="sidebar-nav-toc sidebar-nav-active" data-target="post-toc-wrap">
+            文章目录
+          </li>
+          <li class="sidebar-nav-overview" data-target="site-overview-wrap">
+            站点概览
+          </li>
+        </ul>
+      
+
+      <section class="site-overview-wrap sidebar-panel">
+        <div class="site-overview">
+          <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+            
+              <p class="site-author-name" itemprop="name">白十</p>
+              <p class="site-description motion-element" itemprop="description"></p>
+          </div>
+
+          <nav class="site-state motion-element">
+
+            
+              <div class="site-state-item site-state-posts">
+              
+                <a href="/archives/">
+              
+                  <span class="site-state-item-count">4</span>
+                  <span class="site-state-item-name">日志</span>
+                </a>
+              </div>
+            
+
+            
+              
+              
+              <div class="site-state-item site-state-categories">
+                <a href="/categories/index.html">
+                  <span class="site-state-item-count">3</span>
+                  <span class="site-state-item-name">分类</span>
+                </a>
+              </div>
+            
+
+            
+              
+              
+              <div class="site-state-item site-state-tags">
+                <a href="/tags/index.html">
+                  <span class="site-state-item-count">9</span>
+                  <span class="site-state-item-name">标签</span>
+                </a>
+              </div>
+            
+
+          </nav>
+
+          
+
+          
+            <div class="links-of-author motion-element">
+                
+                  <span class="links-of-author-item">
+                    <a href="https://github.com/sunyinjie" target="_blank" title="GitHub">
+                      
+                        <i class="fa fa-fw fa-github"></i>GitHub</a>
+                  </span>
+                
+                  <span class="links-of-author-item">
+                    <a href="mailto:sunyinjie@gmail.com" target="_blank" title="E-Mail">
+                      
+                        <i class="fa fa-fw fa-envelope"></i>E-Mail</a>
+                  </span>
+                
+            </div>
+          
+
+          
+          
+
+          
+          
+
+          
+
+        </div>
+      </section>
+
+      
+      <!--noindex-->
+        <section class="post-toc-wrap motion-element sidebar-panel sidebar-panel-active">
+          <div class="post-toc">
+
+            
+              
+            
+
+            
+              <div class="post-toc-content"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#IO基础"><span class="nav-number">1.</span> <span class="nav-text">IO基础</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#Linux-IO模型"><span class="nav-number">1.1.</span> <span class="nav-text">Linux IO模型</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#IO多路复用"><span class="nav-number">1.2.</span> <span class="nav-text">IO多路复用</span></a></li></ol></li><li class="nav-item nav-level-1"><a class="nav-link" href="#Java-IO演变"><span class="nav-number">2.</span> <span class="nav-text">Java IO演变</span></a></li></ol></div>
+            
+
+          </div>
+        </section>
+      <!--/noindex-->
+      
+
+      
+
+    </div>
+  </aside>
+
+
+        
+      </div>
+    </main>
+
+    <footer id="footer" class="footer">
+      <div class="footer-inner">
+        <div class="copyright">&copy; <span itemprop="copyrightYear">2018</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">白十</span>
+
+  
+</div>
+
+
+  <div class="powered-by">由 <a class="theme-link" target="_blank" href="https://hexo.io">Hexo</a> 强力驱动</div>
+
+
+
+  <span class="post-meta-divider">|</span>
+
+
+
+  <div class="theme-info">主题 &mdash; <a class="theme-link" target="_blank" href="https://github.com/iissnan/hexo-theme-next">NexT.Gemini</a> v5.1.4</div>
+
+
+
+
+        
+
+
+
+
+
+
+
+        
+      </div>
+    </footer>
+
+    
+      <div class="back-to-top">
+        <i class="fa fa-arrow-up"></i>
+        
+      </div>
+    
+
+    
+
+  </div>
+
+  
+
+<script type="text/javascript">
+  if (Object.prototype.toString.call(window.Promise) !== '[object Function]') {
+    window.Promise = null;
+  }
+</script>
+
+
+
+
+
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+  
+  
+    <script type="text/javascript" src="/lib/jquery/index.js?v=2.1.3"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/fastclick/lib/fastclick.min.js?v=1.0.6"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/jquery_lazyload/jquery.lazyload.js?v=1.9.7"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/velocity/velocity.min.js?v=1.2.1"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/velocity/velocity.ui.min.js?v=1.2.1"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/fancybox/source/jquery.fancybox.pack.js?v=2.1.5"></script>
+  
+
+
+  
+
+
+  <script type="text/javascript" src="/js/src/utils.js?v=5.1.4"></script>
+
+  <script type="text/javascript" src="/js/src/motion.js?v=5.1.4"></script>
+
+
+
+  
+  
+
+
+  <script type="text/javascript" src="/js/src/affix.js?v=5.1.4"></script>
+
+  <script type="text/javascript" src="/js/src/schemes/pisces.js?v=5.1.4"></script>
+
+
+
+  
+  <script type="text/javascript" src="/js/src/scrollspy.js?v=5.1.4"></script>
+<script type="text/javascript" src="/js/src/post-details.js?v=5.1.4"></script>
+
+
+
+  
+
+
+  <script type="text/javascript" src="/js/src/bootstrap.js?v=5.1.4"></script>
+
+
+
+  
+
+
+  
+
+
+
+
+	
+
+
+
+
+
+  
+
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+
+
+
+
+  
+
+  
+
+  
+
+  
+  
+
+  
+
+  
+
+  
+
+</body>
+</html>

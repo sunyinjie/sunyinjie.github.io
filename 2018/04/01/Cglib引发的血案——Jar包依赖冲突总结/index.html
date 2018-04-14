@@ -1,0 +1,891 @@
+<!DOCTYPE html>
+
+
+
+  
+
+
+<html class="theme-next gemini use-motion" lang="zh-Hans">
+<head>
+  <meta charset="UTF-8"/>
+<meta http-equiv="X-UA-Compatible" content="IE=edge" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1"/>
+<meta name="theme-color" content="#222">
+
+
+
+
+
+
+
+
+
+<meta http-equiv="Cache-Control" content="no-transform" />
+<meta http-equiv="Cache-Control" content="no-siteapp" />
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+  
+  <link href="/lib/fancybox/source/jquery.fancybox.css?v=2.1.5" rel="stylesheet" type="text/css" />
+
+
+
+
+
+
+
+<link href="/lib/font-awesome/css/font-awesome.min.css?v=4.6.2" rel="stylesheet" type="text/css" />
+
+<link href="/css/main.css?v=5.1.4" rel="stylesheet" type="text/css" />
+
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png?v=5.1.4">
+
+
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png?v=5.1.4">
+
+
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png?v=5.1.4">
+
+
+  <link rel="mask-icon" href="/images/logo.svg?v=5.1.4" color="#222">
+
+
+
+
+
+  <meta name="keywords" content="cglib,maven,依赖隔离,jar,类加载," />
+
+
+
+
+
+
+
+
+
+
+<meta name="description" content="上周工程引入新的依赖时，出现了CGLIB包冲突。所以想总结一下包冲突的问题。这是一个老生常谈的话题，是人人必会遇到的。尤其是随着工程规模越大，外部依赖越多，发生的概率就越大。消除依赖冲突是每个Coder必备技能之一，所以一起来总结一些常见的问题及解决方式，否则摸不到头绪的时候，想消除依赖冲突是一件能让你抓狂的事情！  什么是依赖冲突貌似没有哪里有官方的解释。按照我们自己的理解就是类加载时，找不到正">
+<meta name="keywords" content="cglib,maven,依赖隔离,jar,类加载">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Cglib引发的血案——Jar包依赖冲突总结">
+<meta property="og:url" content="http://yoursite.com/2018/04/01/Cglib引发的血案——Jar包依赖冲突总结/index.html">
+<meta property="og:site_name" content="十月的喜悦">
+<meta property="og:description" content="上周工程引入新的依赖时，出现了CGLIB包冲突。所以想总结一下包冲突的问题。这是一个老生常谈的话题，是人人必会遇到的。尤其是随着工程规模越大，外部依赖越多，发生的概率就越大。消除依赖冲突是每个Coder必备技能之一，所以一起来总结一些常见的问题及解决方式，否则摸不到头绪的时候，想消除依赖冲突是一件能让你抓狂的事情！  什么是依赖冲突貌似没有哪里有官方的解释。按照我们自己的理解就是类加载时，找不到正">
+<meta property="og:locale" content="zh-Hans">
+<meta property="og:updated_time" content="2018-04-14T16:43:49.210Z">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="Cglib引发的血案——Jar包依赖冲突总结">
+<meta name="twitter:description" content="上周工程引入新的依赖时，出现了CGLIB包冲突。所以想总结一下包冲突的问题。这是一个老生常谈的话题，是人人必会遇到的。尤其是随着工程规模越大，外部依赖越多，发生的概率就越大。消除依赖冲突是每个Coder必备技能之一，所以一起来总结一些常见的问题及解决方式，否则摸不到头绪的时候，想消除依赖冲突是一件能让你抓狂的事情！  什么是依赖冲突貌似没有哪里有官方的解释。按照我们自己的理解就是类加载时，找不到正">
+
+
+
+<script type="text/javascript" id="hexo.configurations">
+  var NexT = window.NexT || {};
+  var CONFIG = {
+    root: '/',
+    scheme: 'Gemini',
+    version: '5.1.4',
+    sidebar: {"position":"left","display":"post","offset":12,"b2t":false,"scrollpercent":false,"onmobile":false},
+    fancybox: true,
+    tabs: true,
+    motion: {"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}},
+    duoshuo: {
+      userId: '0',
+      author: '博主'
+    },
+    algolia: {
+      applicationID: '',
+      apiKey: '',
+      indexName: '',
+      hits: {"per_page":10},
+      labels: {"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}
+    }
+  };
+</script>
+
+
+
+  <link rel="canonical" href="http://yoursite.com/2018/04/01/Cglib引发的血案——Jar包依赖冲突总结/"/>
+
+
+
+
+
+  <title>Cglib引发的血案——Jar包依赖冲突总结 | 十月的喜悦</title>
+  
+
+
+
+
+
+  <script type="text/javascript">
+    var _hmt = _hmt || [];
+    (function() {
+      var hm = document.createElement("script");
+      hm.src = "https://hm.baidu.com/hm.js?378393a1899032f50bd847dbd229b2dd";
+      var s = document.getElementsByTagName("script")[0];
+      s.parentNode.insertBefore(hm, s);
+    })();
+  </script>
+
+
+
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" lang="zh-Hans">
+
+  
+  
+    
+  
+
+  <div class="container sidebar-position-left page-post-detail">
+    <div class="headband"></div>
+
+    <header id="header" class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-wrapper">
+  <div class="site-meta ">
+    
+
+    <div class="custom-logo-site-title">
+      <a href="/"  class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">十月的喜悦</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+      
+        <p class="site-subtitle">不积蹞步，无以至千里；不积小流，无以成江海。</p>
+      
+  </div>
+
+  <div class="site-nav-toggle">
+    <button>
+      <span class="btn-bar"></span>
+      <span class="btn-bar"></span>
+      <span class="btn-bar"></span>
+    </button>
+  </div>
+</div>
+
+<nav class="site-nav">
+  
+
+  
+    <ul id="menu" class="menu">
+      
+        
+        <li class="menu-item menu-item-home">
+          <a href="/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-home"></i> <br />
+            
+            首页
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-tags">
+          <a href="/tags/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-tags"></i> <br />
+            
+            标签
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-categories">
+          <a href="/categories/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-th"></i> <br />
+            
+            分类
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-archives">
+          <a href="/archives/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-archive"></i> <br />
+            
+            归档
+          </a>
+        </li>
+      
+
+      
+    </ul>
+  
+
+  
+</nav>
+
+
+
+ </div>
+    </header>
+
+    <main id="main" class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          <div id="content" class="content">
+            
+
+  <div id="posts" class="posts-expand">
+    
+
+  
+
+  
+  
+  
+
+  <article class="post post-type-normal" itemscope itemtype="http://schema.org/Article">
+  
+  
+  
+  <div class="post-block">
+    <link itemprop="mainEntityOfPage" href="http://yoursite.com/2018/04/01/Cglib引发的血案——Jar包依赖冲突总结/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="name" content="白十">
+      <meta itemprop="description" content="">
+      <meta itemprop="image" content="/images/avatar.gif">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="十月的喜悦">
+    </span>
+
+    
+      <header class="post-header">
+
+        
+        
+          <h1 class="post-title" itemprop="name headline">Cglib引发的血案——Jar包依赖冲突总结</h1>
+        
+
+        <div class="post-meta">
+	  
+          <span class="post-time">
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">发表于</span>
+              
+              <time title="创建于" itemprop="dateCreated datePublished" datetime="2018-04-01T15:15:38+00:00">
+                2018-04-01
+              </time>
+            
+
+            
+
+            
+          </span>
+
+          
+            <span class="post-category" >
+            
+              <span class="post-meta-divider">|</span>
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">分类于</span>
+              
+              
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/Maven/" itemprop="url" rel="index">
+                    <span itemprop="name">Maven</span>
+                  </a>
+                </span>
+
+                
+                
+              
+            </span>
+          
+
+          
+            
+          
+
+          
+          
+
+          
+
+          
+
+          
+
+        </div>
+      </header>
+    
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+      
+
+      
+        <p>上周工程引入新的依赖时，出现了CGLIB包冲突。所以想总结一下包冲突的问题。这是一个老生常谈的话题，是人人必会遇到的。尤其是随着工程规模越大，外部依赖越多，发生的概率就越大。消除依赖冲突是每个Coder必备技能之一，所以一起来总结一些常见的问题及解决方式，否则摸不到头绪的时候，想消除依赖冲突是一件能让你抓狂的事情！</p>
+<hr>
+<h2 id="什么是依赖冲突"><a href="#什么是依赖冲突" class="headerlink" title="什么是依赖冲突"></a>什么是依赖冲突</h2><p>貌似没有哪里有官方的解释。按照我们自己的理解就是类加载时，找不到正确的类或者使用了错误的类。细分下来有2种场景：</p>
+<ol>
+<li>工程内部同时引用了同一包，但不同版本的多个依赖。此种场景下，类加载时，有可能选择到了错误的版本</li>
+<li>同样的类（包名类名完全相同，这个概念要清楚。并不是指包括方法签名都一样的类，<u>仅仅指包名和类名</u>）存在于多个不同的依赖包中。此种场景下，同样的类会有多个版本，类加载时，有可能选择到了错误的版本</li>
+</ol>
+<p>上述2种情况仅是发生场景的不同，其结果都是一致的，都会导致类加载器加载不到正确的类，进而发生各类问题。接下来根据不同的场景详细分析。要解决问题，首先要分析问题发生的根源。也就是在什么样的前置条件下，会导致这个问题发生。接着再针对每一种可能出现的前置条件一一处理。</p>
+<h3 id="场景一：同一Jar包出现了不同版本"><a href="#场景一：同一Jar包出现了不同版本" class="headerlink" title="场景一：同一Jar包出现了不同版本"></a>场景一：同一Jar包出现了不同版本</h3><ul>
+<li>前置条件<ul>
+<li>依赖传递导致——简单说就是多个不同的依赖包间接依赖了同一个包的不同版本</li>
+<li>Maven的版本仲裁选择了错误的版本</li>
+<li>不同版本之间的类或接口存在差异，且当前工程中有依赖了其中有差异的方法</li>
+</ul>
+</li>
+</ul>
+<h3 id="场景二：同一个类出现在不同的Jar包中"><a href="#场景二：同一个类出现在不同的Jar包中" class="headerlink" title="场景二：同一个类出现在不同的Jar包中"></a>场景二：同一个类出现在不同的Jar包中</h3><ul>
+<li>前置条件<ul>
+<li>假设同一个类A存在于X包和Y包中，类加载器如果想要的是X包中的A，而加载时先选择加载了Y包中的A，那就是加载到了非期望的版本</li>
+</ul>
+</li>
+</ul>
+<h2 id="冲突的原因"><a href="#冲突的原因" class="headerlink" title="冲突的原因"></a>冲突的原因</h2><h3 id="Maven仲裁机制"><a href="#Maven仲裁机制" class="headerlink" title="Maven仲裁机制"></a>Maven仲裁机制</h3><p>在当前Maven的天下，场景一无法避免不谈到Maven仲裁机制。因为Maven具有的传递性，通常简化了我们引用Jar包的管理，但给Maven自身带来了复杂性。于是Maven出了一套仲裁机制自行管理依赖版本。但Maven选择的版本很有可能不是我们所期望的。</p>
+<p>讲到这里，有的同学对Maven仲裁机制不是很了解，那就先温习一下：</p>
+<ol>
+<li>优先使用依赖管理标签（dependencyManagement）内定义的版本，此时其他声明均无效</li>
+<li>若没有声明版本，按照最短路径进行仲裁</li>
+<li>若路径一样长，按照最先声明进行仲裁</li>
+</ol>
+<p>按照序号排列顺序仲裁。</p>
+<h3 id="依赖包加载顺序"><a href="#依赖包加载顺序" class="headerlink" title="依赖包加载顺序"></a>依赖包加载顺序</h3><p>假如一个工程内既有Jar A的V1版本，也有它的V2版本。在类加载时能固定一个顺序，岂不是就可以规避冲突了？理是这么个理，可是实现起来比较麻烦了，为什么这么说？</p>
+<ul>
+<li>Java的类加载机制是面试热点，一起复习一下。JVM类加载机制使用的是双亲委派模式——加载顺序由高至低，引导（启动）类加载器-&gt;扩展类加载器-&gt;系统（应用）类加载器-&gt;自定义类加载器，每个加载器对应加载不同的路径下的包。<ul>
+<li>引导类加载器——JAVA_HOME/jar/lib/rt.jar目录下的核心类或-Xbootclasspath指定目录下的类</li>
+<li>扩展类加载器——JAVA_HOME/lib/ext目录下的扩展类或-Djava.ext.dirs指定目录下的类</li>
+<li>系统类加载器——-CLASSPATH或-Djava.class.path所指的目录下的类（一般就是我们所开发的Java应用下的类）</li>
+<li>自定义类加载器——想加载哪就加载哪，自定义类继承ClassLoader，重写方法</li>
+</ul>
+</li>
+<li>系统的文件加载顺序，最诡异的冲突制造者。比如Tomcat的类加载器获取加载路径下的文件时不排序，此时完全依赖系统返回的文件顺序。在开发环境、日常环境和测试环境就是没问题，一上线就出问题了。简直让人抓狂，这个时候你可能就要关注一下非线上的正常运行环境与线上是否一模一样了。</li>
+</ul>
+<h2 id="冲突的结果"><a href="#冲突的结果" class="headerlink" title="冲突的结果"></a>冲突的结果</h2><p>冲突后的结果无非两类，异常或者结果与预期不一致。</p>
+<table>
+<thead>
+<tr>
+<th>异常</th>
+<th>起因  </th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>ClassNotFoundException</td>
+<td>通常由于仲裁到了错误的版本，运行期没有找到我们所需要的类。 </td>
+</tr>
+<tr>
+<td>NoSuchMethodError</td>
+<td>2类冲突都有可能</td>
+</tr>
+<tr>
+<td>NoClassDefFoundError</td>
+<td>雷同</td>
+</tr>
+<tr>
+<td>LinkageError</td>
+<td>雷同</td>
+</tr>
+</tbody>
+</table>
+<p>除了表格里这些异常，还有其他异常。不做一一分析了，大致都是上文阐述的两类冲突。</p>
+<h2 id="解决问题"><a href="#解决问题" class="headerlink" title="解决问题"></a>解决问题</h2><h3 id="要解决先要排查"><a href="#要解决先要排查" class="headerlink" title="要解决先要排查"></a>要解决先要排查</h3><ol>
+<li>通过异常堆栈信息找到冲突的类名</li>
+<li>利用开发工具定位到该类存在于哪个包中</li>
+<li>使用Maven命令打印冲突树<code>mvn dependency:tree -Dverbose -Dincludes=&lt;groupId&gt;:&lt;artifactId&gt;</code>，确定到冲突包所在位置</li>
+<li>根据冲突场景选择不同处理方式。</li>
+</ol>
+<table>
+<thead>
+<tr>
+<th>冲突场景</th>
+<th>解决方案  </th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>同一Jar包出现了不同版本</td>
+<td>excludes排除或声明一个版本（推荐使用后者） </td>
+</tr>
+<tr>
+<td>同一个类出现在不同的Jar包中</td>
+<td>优先排除，若不能排除，就升级或者寻找可替换的包</td>
+</tr>
+</tbody>
+</table>
+<p>除了常用的解决方式以外，还可以利用类加载机制实现Jar包隔离。比如目前我司内部使用的Tomcat容器是定制包装的，针对某些易冲突的依赖，都会呼吁相关部门开发所谓的“插件”，其本质就是将依赖以“插件”形式扔进容器中，实现依赖隔离，交给容器来加载，从而避免冲突。当然，我们也可以自定义一个类加载器，只不过这么做看起来并不是最合适的方案，自定义类加载器实现隔离应该放在解决依赖冲突的所有方案中的最后选择。</p>
+<h2 id="有备无患"><a href="#有备无患" class="headerlink" title="有备无患"></a>有备无患</h2><p>如果第二类冲突发生，且又不容易直接排除时，只能选择升级Jar包或者替换时，问题就变得相当复杂，非常耗时。所以最好提前预防。建议：</p>
+<ol>
+<li>在父pom依赖管理标签中进行统一版本管理，子pom不再声明版本，直接引用</li>
+<li>不要将无用依赖引入，废弃依赖及时从pom中删除</li>
+<li>善用插件maven-enforcer-plugin + extra-enforcer-rules工具，能自动扫描Jar包将冲突检测并打印出来</li>
+</ol>
+<h2 id="案例"><a href="#案例" class="headerlink" title="案例"></a>案例</h2><h3 id="同一Jar包出现了不同版本"><a href="#同一Jar包出现了不同版本" class="headerlink" title="同一Jar包出现了不同版本"></a>同一Jar包出现了不同版本</h3><p>最常见的冲突，但也是最好解决的。上文已经说过，此处不再重复。见 <a href="#解决问题">解决问题</a></p>
+<h3 id="同一个类出现在不同的Jar包中"><a href="#同一个类出现在不同的Jar包中" class="headerlink" title="同一个类出现在不同的Jar包中"></a>同一个类出现在不同的Jar包中</h3><p>回到本文开头部分提到的CGLIB血案。A包中使用了cglib-nodep 3.4，B包中间接依赖了asm 2.2，C包中间接依赖了cglib 2.2，D包中使用了cglib-nodep 2.2。</p>
+<p>排错解决的过程就不多说了，总之是很“艰难”，最终的解决方案是：</p>
+<ol>
+<li>排除所有cglib</li>
+<li>排除所有asm</li>
+<li>仲裁声明cglib-nodep 2.2版本</li>
+</ol>
+<p>总结一个关于cglib相关包冲突的使用心得吧~</p>
+<ol>
+<li>cglib-nodep不可与cglib、asm共存，若要使用cglib-nodep，需要排除掉所有的cglib和asm。这是因为cglib-nodep = cglib + asm</li>
+<li>cglib搭配asm使用</li>
+<li>cglib与asm的版本号搭配上，每个小版本之间有可能存在差异，所以只能通过试错总结版本搭配</li>
+<li>cglib-nodep 3.1版本是风水岭，3.1以下（包括3.1）中asm相关类的包名和类名与3.1以上版本有差异</li>
+</ol>
+<p>另外之前也遇到过Apache的commons-lang包，2.x升级到3.x时，包名从commons-lang变为commons-lang3，部分接口也不同，由于包名不同和传递性依赖，经常会出现两种Jar包同时存在。org.apache.commons.lang.StringUtils.isBlank方法就是一个典型，如果加载了错误版本，就会出现NoSuchMethodError异常。</p>
+
+      
+    </div>
+    
+    
+    
+
+    
+      <div>
+        <div id="wechat_subscriber" style="display: block; padding: 10px 0; margin: 20px auto; width: 100%; text-align: center">
+    <img id="wechat_subscriber_qcode" src="/uploads/wechat-qcode.jpg" alt="白十 wechat" style="width: 200px; max-width: 100%;"/>
+    <div>欢迎订阅我的微信公众号！</div>
+</div>
+
+      </div>
+    
+
+    
+
+    
+
+    <footer class="post-footer">
+      
+        <div class="post-tags">
+          
+            <a href="/tags/cglib/" rel="tag"># cglib</a>
+          
+            <a href="/tags/maven/" rel="tag"># maven</a>
+          
+            <a href="/tags/依赖隔离/" rel="tag"># 依赖隔离</a>
+          
+            <a href="/tags/jar/" rel="tag"># jar</a>
+          
+            <a href="/tags/类加载/" rel="tag"># 类加载</a>
+          
+        </div>
+      
+
+      
+      
+      
+
+      
+        <div class="post-nav">
+          <div class="post-nav-next post-nav-item">
+            
+              <a href="/2018/03/31/Redis缓存时效问题/" rel="next" title="Redis缓存时效问题">
+                <i class="fa fa-chevron-left"></i> Redis缓存时效问题
+              </a>
+            
+          </div>
+
+          <span class="post-nav-divider"></span>
+
+          <div class="post-nav-prev post-nav-item">
+            
+              <a href="/2018/04/14/Netty指南/" rel="prev" title="Netty指南">
+                Netty指南 <i class="fa fa-chevron-right"></i>
+              </a>
+            
+          </div>
+        </div>
+      
+
+      
+      
+    </footer>
+  </div>
+  
+  
+  
+  </article>
+
+
+
+    <div class="post-spread">
+      
+    </div>
+  </div>
+
+
+          </div>
+          
+
+
+          
+
+  
+
+
+
+        </div>
+        
+          
+  
+  <div class="sidebar-toggle">
+    <div class="sidebar-toggle-line-wrap">
+      <span class="sidebar-toggle-line sidebar-toggle-line-first"></span>
+      <span class="sidebar-toggle-line sidebar-toggle-line-middle"></span>
+      <span class="sidebar-toggle-line sidebar-toggle-line-last"></span>
+    </div>
+  </div>
+
+  <aside id="sidebar" class="sidebar">
+    
+    <div class="sidebar-inner">
+
+      
+
+      
+        <ul class="sidebar-nav motion-element">
+          <li class="sidebar-nav-toc sidebar-nav-active" data-target="post-toc-wrap">
+            文章目录
+          </li>
+          <li class="sidebar-nav-overview" data-target="site-overview-wrap">
+            站点概览
+          </li>
+        </ul>
+      
+
+      <section class="site-overview-wrap sidebar-panel">
+        <div class="site-overview">
+          <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+            
+              <p class="site-author-name" itemprop="name">白十</p>
+              <p class="site-description motion-element" itemprop="description"></p>
+          </div>
+
+          <nav class="site-state motion-element">
+
+            
+              <div class="site-state-item site-state-posts">
+              
+                <a href="/archives/">
+              
+                  <span class="site-state-item-count">4</span>
+                  <span class="site-state-item-name">日志</span>
+                </a>
+              </div>
+            
+
+            
+              
+              
+              <div class="site-state-item site-state-categories">
+                <a href="/categories/index.html">
+                  <span class="site-state-item-count">3</span>
+                  <span class="site-state-item-name">分类</span>
+                </a>
+              </div>
+            
+
+            
+              
+              
+              <div class="site-state-item site-state-tags">
+                <a href="/tags/index.html">
+                  <span class="site-state-item-count">9</span>
+                  <span class="site-state-item-name">标签</span>
+                </a>
+              </div>
+            
+
+          </nav>
+
+          
+
+          
+            <div class="links-of-author motion-element">
+                
+                  <span class="links-of-author-item">
+                    <a href="https://github.com/sunyinjie" target="_blank" title="GitHub">
+                      
+                        <i class="fa fa-fw fa-github"></i>GitHub</a>
+                  </span>
+                
+                  <span class="links-of-author-item">
+                    <a href="mailto:sunyinjie@gmail.com" target="_blank" title="E-Mail">
+                      
+                        <i class="fa fa-fw fa-envelope"></i>E-Mail</a>
+                  </span>
+                
+            </div>
+          
+
+          
+          
+
+          
+          
+
+          
+
+        </div>
+      </section>
+
+      
+      <!--noindex-->
+        <section class="post-toc-wrap motion-element sidebar-panel sidebar-panel-active">
+          <div class="post-toc">
+
+            
+              
+            
+
+            
+              <div class="post-toc-content"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#什么是依赖冲突"><span class="nav-number">1.</span> <span class="nav-text">什么是依赖冲突</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#场景一：同一Jar包出现了不同版本"><span class="nav-number">1.1.</span> <span class="nav-text">场景一：同一Jar包出现了不同版本</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#场景二：同一个类出现在不同的Jar包中"><span class="nav-number">1.2.</span> <span class="nav-text">场景二：同一个类出现在不同的Jar包中</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#冲突的原因"><span class="nav-number">2.</span> <span class="nav-text">冲突的原因</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#Maven仲裁机制"><span class="nav-number">2.1.</span> <span class="nav-text">Maven仲裁机制</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#依赖包加载顺序"><span class="nav-number">2.2.</span> <span class="nav-text">依赖包加载顺序</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#冲突的结果"><span class="nav-number">3.</span> <span class="nav-text">冲突的结果</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#解决问题"><span class="nav-number">4.</span> <span class="nav-text">解决问题</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#要解决先要排查"><span class="nav-number">4.1.</span> <span class="nav-text">要解决先要排查</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#有备无患"><span class="nav-number">5.</span> <span class="nav-text">有备无患</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#案例"><span class="nav-number">6.</span> <span class="nav-text">案例</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#同一Jar包出现了不同版本"><span class="nav-number">6.1.</span> <span class="nav-text">同一Jar包出现了不同版本</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#同一个类出现在不同的Jar包中"><span class="nav-number">6.2.</span> <span class="nav-text">同一个类出现在不同的Jar包中</span></a></li></ol></li></ol></div>
+            
+
+          </div>
+        </section>
+      <!--/noindex-->
+      
+
+      
+
+    </div>
+  </aside>
+
+
+        
+      </div>
+    </main>
+
+    <footer id="footer" class="footer">
+      <div class="footer-inner">
+        <div class="copyright">&copy; <span itemprop="copyrightYear">2018</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">白十</span>
+
+  
+</div>
+
+
+  <div class="powered-by">由 <a class="theme-link" target="_blank" href="https://hexo.io">Hexo</a> 强力驱动</div>
+
+
+
+  <span class="post-meta-divider">|</span>
+
+
+
+  <div class="theme-info">主题 &mdash; <a class="theme-link" target="_blank" href="https://github.com/iissnan/hexo-theme-next">NexT.Gemini</a> v5.1.4</div>
+
+
+
+
+        
+
+
+
+
+
+
+
+        
+      </div>
+    </footer>
+
+    
+      <div class="back-to-top">
+        <i class="fa fa-arrow-up"></i>
+        
+      </div>
+    
+
+    
+
+  </div>
+
+  
+
+<script type="text/javascript">
+  if (Object.prototype.toString.call(window.Promise) !== '[object Function]') {
+    window.Promise = null;
+  }
+</script>
+
+
+
+
+
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+  
+  
+    <script type="text/javascript" src="/lib/jquery/index.js?v=2.1.3"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/fastclick/lib/fastclick.min.js?v=1.0.6"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/jquery_lazyload/jquery.lazyload.js?v=1.9.7"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/velocity/velocity.min.js?v=1.2.1"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/velocity/velocity.ui.min.js?v=1.2.1"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/fancybox/source/jquery.fancybox.pack.js?v=2.1.5"></script>
+  
+
+
+  
+
+
+  <script type="text/javascript" src="/js/src/utils.js?v=5.1.4"></script>
+
+  <script type="text/javascript" src="/js/src/motion.js?v=5.1.4"></script>
+
+
+
+  
+  
+
+
+  <script type="text/javascript" src="/js/src/affix.js?v=5.1.4"></script>
+
+  <script type="text/javascript" src="/js/src/schemes/pisces.js?v=5.1.4"></script>
+
+
+
+  
+  <script type="text/javascript" src="/js/src/scrollspy.js?v=5.1.4"></script>
+<script type="text/javascript" src="/js/src/post-details.js?v=5.1.4"></script>
+
+
+
+  
+
+
+  <script type="text/javascript" src="/js/src/bootstrap.js?v=5.1.4"></script>
+
+
+
+  
+
+
+  
+
+
+
+
+	
+
+
+
+
+
+  
+
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+
+
+
+
+  
+
+  
+
+  
+
+  
+  
+
+  
+
+  
+
+  
+
+</body>
+</html>

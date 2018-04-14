@@ -1,0 +1,877 @@
+<!DOCTYPE html>
+
+
+
+  
+
+
+<html class="theme-next gemini use-motion" lang="zh-Hans">
+<head>
+  <meta charset="UTF-8"/>
+<meta http-equiv="X-UA-Compatible" content="IE=edge" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1"/>
+<meta name="theme-color" content="#222">
+
+
+
+
+
+
+
+
+
+<meta http-equiv="Cache-Control" content="no-transform" />
+<meta http-equiv="Cache-Control" content="no-siteapp" />
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+  
+  <link href="/lib/fancybox/source/jquery.fancybox.css?v=2.1.5" rel="stylesheet" type="text/css" />
+
+
+
+
+
+
+
+<link href="/lib/font-awesome/css/font-awesome.min.css?v=4.6.2" rel="stylesheet" type="text/css" />
+
+<link href="/css/main.css?v=5.1.4" rel="stylesheet" type="text/css" />
+
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png?v=5.1.4">
+
+
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png?v=5.1.4">
+
+
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png?v=5.1.4">
+
+
+  <link rel="mask-icon" href="/images/logo.svg?v=5.1.4" color="#222">
+
+
+
+
+
+  <meta name="keywords" content="Redis," />
+
+
+
+
+
+
+
+
+
+
+<meta name="description" content="以下所提到的LevelDB与Redis均为公司内部二次封装后，所以部分功能与官方原生略有差别。 背景针对用户每日的上传文件需要做一些简单的统计作为费用控制参考，如果数据结果相差太多，可能会导致资损。每日的QPS大概平峰读7W，写12W。高峰读15W，写24W。目前流程是用户如果有了上传或者删除图片操作后，先写关系型数据库，有中间件监控关系型数据库的binlog，发现更改后，发送消息。存储系统监听到">
+<meta name="keywords" content="Redis">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Redis缓存时效问题">
+<meta property="og:url" content="http://yoursite.com/2018/03/31/Redis缓存时效问题/index.html">
+<meta property="og:site_name" content="十月的喜悦">
+<meta property="og:description" content="以下所提到的LevelDB与Redis均为公司内部二次封装后，所以部分功能与官方原生略有差别。 背景针对用户每日的上传文件需要做一些简单的统计作为费用控制参考，如果数据结果相差太多，可能会导致资损。每日的QPS大概平峰读7W，写12W。高峰读15W，写24W。目前流程是用户如果有了上传或者删除图片操作后，先写关系型数据库，有中间件监控关系型数据库的binlog，发现更改后，发送消息。存储系统监听到">
+<meta property="og:locale" content="zh-Hans">
+<meta property="og:updated_time" content="2018-04-14T16:43:49.210Z">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="Redis缓存时效问题">
+<meta name="twitter:description" content="以下所提到的LevelDB与Redis均为公司内部二次封装后，所以部分功能与官方原生略有差别。 背景针对用户每日的上传文件需要做一些简单的统计作为费用控制参考，如果数据结果相差太多，可能会导致资损。每日的QPS大概平峰读7W，写12W。高峰读15W，写24W。目前流程是用户如果有了上传或者删除图片操作后，先写关系型数据库，有中间件监控关系型数据库的binlog，发现更改后，发送消息。存储系统监听到">
+
+
+
+<script type="text/javascript" id="hexo.configurations">
+  var NexT = window.NexT || {};
+  var CONFIG = {
+    root: '/',
+    scheme: 'Gemini',
+    version: '5.1.4',
+    sidebar: {"position":"left","display":"post","offset":12,"b2t":false,"scrollpercent":false,"onmobile":false},
+    fancybox: true,
+    tabs: true,
+    motion: {"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}},
+    duoshuo: {
+      userId: '0',
+      author: '博主'
+    },
+    algolia: {
+      applicationID: '',
+      apiKey: '',
+      indexName: '',
+      hits: {"per_page":10},
+      labels: {"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}
+    }
+  };
+</script>
+
+
+
+  <link rel="canonical" href="http://yoursite.com/2018/03/31/Redis缓存时效问题/"/>
+
+
+
+
+
+  <title>Redis缓存时效问题 | 十月的喜悦</title>
+  
+
+
+
+
+
+  <script type="text/javascript">
+    var _hmt = _hmt || [];
+    (function() {
+      var hm = document.createElement("script");
+      hm.src = "https://hm.baidu.com/hm.js?378393a1899032f50bd847dbd229b2dd";
+      var s = document.getElementsByTagName("script")[0];
+      s.parentNode.insertBefore(hm, s);
+    })();
+  </script>
+
+
+
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" lang="zh-Hans">
+
+  
+  
+    
+  
+
+  <div class="container sidebar-position-left page-post-detail">
+    <div class="headband"></div>
+
+    <header id="header" class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-wrapper">
+  <div class="site-meta ">
+    
+
+    <div class="custom-logo-site-title">
+      <a href="/"  class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">十月的喜悦</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+      
+        <p class="site-subtitle">不积蹞步，无以至千里；不积小流，无以成江海。</p>
+      
+  </div>
+
+  <div class="site-nav-toggle">
+    <button>
+      <span class="btn-bar"></span>
+      <span class="btn-bar"></span>
+      <span class="btn-bar"></span>
+    </button>
+  </div>
+</div>
+
+<nav class="site-nav">
+  
+
+  
+    <ul id="menu" class="menu">
+      
+        
+        <li class="menu-item menu-item-home">
+          <a href="/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-home"></i> <br />
+            
+            首页
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-tags">
+          <a href="/tags/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-tags"></i> <br />
+            
+            标签
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-categories">
+          <a href="/categories/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-th"></i> <br />
+            
+            分类
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-archives">
+          <a href="/archives/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-archive"></i> <br />
+            
+            归档
+          </a>
+        </li>
+      
+
+      
+    </ul>
+  
+
+  
+</nav>
+
+
+
+ </div>
+    </header>
+
+    <main id="main" class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          <div id="content" class="content">
+            
+
+  <div id="posts" class="posts-expand">
+    
+
+  
+
+  
+  
+  
+
+  <article class="post post-type-normal" itemscope itemtype="http://schema.org/Article">
+  
+  
+  
+  <div class="post-block">
+    <link itemprop="mainEntityOfPage" href="http://yoursite.com/2018/03/31/Redis缓存时效问题/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="name" content="白十">
+      <meta itemprop="description" content="">
+      <meta itemprop="image" content="/images/avatar.gif">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="十月的喜悦">
+    </span>
+
+    
+      <header class="post-header">
+
+        
+        
+          <h1 class="post-title" itemprop="name headline">Redis缓存时效问题</h1>
+        
+
+        <div class="post-meta">
+	  
+          <span class="post-time">
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">发表于</span>
+              
+              <time title="创建于" itemprop="dateCreated datePublished" datetime="2018-03-31T19:33:32+00:00">
+                2018-03-31
+              </time>
+            
+
+            
+
+            
+          </span>
+
+          
+            <span class="post-category" >
+            
+              <span class="post-meta-divider">|</span>
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">分类于</span>
+              
+              
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/Redis/" itemprop="url" rel="index">
+                    <span itemprop="name">Redis</span>
+                  </a>
+                </span>
+
+                
+                
+              
+            </span>
+          
+
+          
+            
+          
+
+          
+          
+
+          
+
+          
+
+          
+
+        </div>
+      </header>
+    
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+      
+
+      
+        <p><u>以下所提到的LevelDB与Redis均为公司内部二次封装后，所以部分功能与官方原生略有差别。</u></p>
+<h2 id="背景"><a href="#背景" class="headerlink" title="背景"></a>背景</h2><p>针对用户每日的上传文件需要做一些简单的统计作为费用控制参考，如果数据结果相差太多，可能会导致资损。每日的QPS大概平峰读7W，写12W。高峰读15W，写24W。目前流程是用户如果有了上传或者删除图片操作后，先写关系型数据库，有中间件监控关系型数据库的binlog，发现更改后，发送消息。存储系统监听到消息后，将数据变动存储到LevelDB。数据结构为pkey=userId，skey=日期，value=上传总数or已上传总存储量。每个以skey维度，30天有效期做持久化。容错为每日定时定次的map-reduce来做离线计算，计算后结果若与LevelDB无法匹配，以MR结果为准，覆盖LevelDB中的数据。</p>
+<h2 id="问题"><a href="#问题" class="headerlink" title="问题"></a>问题</h2><p>按照上述背景描述来看，整套实施方案没有明显纰漏，但是在实际运行中发现有3类问题</p>
+<ol>
+<li>由于QPS较高，而LevelDB的限流阈值是9000的请求量，当达到阈值后，数据写入失败</li>
+<li>当LevelDB发生宕机后，数据恢复平均时长在15分钟左右，而业务方能接受的时长在10分钟以内</li>
+<li>在目前使用的数据结构中，value支持的类型是Integer，但若用户上传的是超大文件，需将文件大小存储量拆分为高低位（高位1GB以上，低位1GB以下）分别存储。这种方式无论在存取过程中，引入了原子性问题</li>
+</ol>
+<h2 id="迁移方案——Redis"><a href="#迁移方案——Redis" class="headerlink" title="迁移方案——Redis"></a>迁移方案——Redis</h2><h3 id="优势"><a href="#优势" class="headerlink" title="优势"></a>优势</h3><ol>
+<li>数据结构方面支持类Redis的复杂类型外，还提供比Redis更多的类型和功能</li>
+<li>单机版的实例，最大可支撑64G，QPS大致在70~80k左右（热点数据，如果对应于Range操作会更低）；集群版实例，可以支持到1T/2T的集群，大致3-7M TPS</li>
+<li>对于持久化的实例，集群内份数为2份。主挂切备，备挂换备，数据不会丢失。如果在同城容灾集群，份数为2+2。<br>Redis的集群内HA主要包括引擎的错误检测 和快速切换 ，这个检测过程，最长16s，平均只有7秒。集群间的HA包括同城容灾和跨地域复制，跨地域复制可以工作在多Master的多活模式</li>
+</ol>
+<h3 id="缺陷"><a href="#缺陷" class="headerlink" title="缺陷"></a>缺陷</h3><p>官方文档描述</p>
+<blockquote>
+<p>持久化类型的原理是内存全量数据+write behind log，对于OPS在绝大多数情况下几乎与缓存性相同，但是在峰值写入时，由于受到WBL的影响，性能会比cache这种log型低20%-50%（仍旧依赖磁盘类型，和操作系统file cache情况）。</p>
+</blockquote>
+<p>线上环境情况需上线后观察</p>
+<h3 id="方案"><a href="#方案" class="headerlink" title="方案"></a>方案</h3><h4 id="确认数据结构"><a href="#确认数据结构" class="headerlink" title="确认数据结构"></a>确认数据结构</h4><ul>
+<li>存储量<br>采用Hashmap存储，key为{userId}_modifiedDate，field为RealTimeFileQuota，value为存储量</li>
+<li>上传文件数<br>采用Hashmap存储，key为{userId}_modifiedDate，field为RealTimeFileNum，value为文件数  </li>
+</ul>
+<p><strong>注意：此处的key真实存储时也需要包含{}，目的是将userId作为hashtag来保证同一个用户的所有数据不会被分散到不同的slot中。因为在对账时，需要批量获取数据，必须保证key都在同一个slot内。</strong>  </p>
+<h4 id="API"><a href="#API" class="headerlink" title="API"></a>API</h4><ul>
+<li>针对Hashmap需要使用到的api<br>HINCRBY key field increment<br>EXPIRE key seconds<br>HGET key field<br>EXIST key<br>以及高级功能pipeline（适用批量获取用户某个时间段内所有存储量）</li>
+</ul>
+<h2 id="引发的问题"><a href="#引发的问题" class="headerlink" title="引发的问题"></a>引发的问题</h2><p>由于key是以userId+操作日期为维度创建，并且每个用户的每日数据有效期为30天，因此我们的set动作时包含了3个步骤：</p>
+<ol>
+<li>获取当前key是否存在</li>
+<li>真正的set操作</li>
+<li>若key在set前已存在，结束流程，否则刷新key有效期30天</li>
+</ol>
+<p>按照这种操作逻辑，一次set动作至少要有2次redis交互，多则3次。前者情况每日最多发生N次，后者情况每日最多发生1次。</p>
+<p>无论怎样，都是不理想的设计。在这种高并发情况下，每多一次IO，都会造成性能损耗，引来为止风险。</p>
+<p>最为理想的解决方案是，一次IO操作完成上述3步；退而求其次，也希望可以有一个类似redis中对String结构SETEX的操作。</p>
+<h2 id="求医问药"><a href="#求医问药" class="headerlink" title="求医问药"></a>求医问药</h2><p>对于所有的缓存，都必然需要一个主键时效及淘汰机制，否则你的内存指定是要爆的。那么Redis的这两种机制是如何的呢？</p>
+<h3 id="主键失效机制"><a href="#主键失效机制" class="headerlink" title="主键失效机制"></a>主键失效机制</h3><p>所谓主键失效机制，就是我们平时常常用的的EXPIRE、EXPIREAT、PEXPIRE、PEXPIREAT、SETEX和PSETEX命令。前4个都是设置key的有效期，区别无非就是传入的value不同，有日期的，有时间戳的，有秒的，还有毫秒的。后2个cmd都是特别针对String结构的，将set和expire合二为一，一次IO，做了两件事。和我们上文中所理想的方式差不多。</p>
+<p>只要给某个key设定了有效期，这类key就是volatile key（不稳定key），就好像Java中的volatile字段，字面理解都不稳定，都是会随时发生变化的。而另外一类就是没有设置有效期的key，这类叫作persistent key（持久化key）。如果没有特殊需求，建议都使用VK，目的在于提升内存使用率和预防内存满了之后，数据丢失或写入失败，这个就是淘汰机制要说的内容，别着急，后面再说它。回到原本的话题——主键失效机制。</p>
+<h4 id="生存时间"><a href="#生存时间" class="headerlink" title="生存时间"></a>生存时间</h4><p>生存时间就是KEY的有效期，当一个KEY的生存时间等于0时，也就是它生命周期结束的时候，这个KEY和其所对应的数据<u>可能会被删除！</u>（敲黑板：是可能！不是一定！具体解释看下文）在有效期开始至结束这个范围内，其实我们是可以改变影响它的，也就是说有些命令是可以影响生存时间，而有些命令是不会影响的。</p>
+<ol>
+<li>DEL 毋庸置疑，都把一个KEY删掉了，哪里还存在生存时间问题呢</li>
+<li>SET和GETSET 针对一个已经存在的KEY，覆盖了新的数据同时，生存时间也会连同被重置</li>
+<li>RENAME 若将一个VKA改名VKB，这时旧的VKB会被delete，新的VKB的生存时间与VKA相同（有点绕，得琢磨一会）</li>
+<li>PERSIST 没的说，把一个VK持久化了，VK-&gt;PK,自然生存时间已经没有意义了，所以生存时间是要被干掉的</li>
+</ol>
+<p>既然有的命令可以影响生存时间，那就有其他的命令不会影响生存时间，比如：</p>
+<ol>
+<li>INCR</li>
+<li>PUSH类操作</li>
+<li>HSET</li>
+<li>HINCR</li>
+<li>RENAME 疑惑状···上面不是说RENAME可以影响吗？这个是要分情况的。假如对一个VK进行了RENAME操作，期望改的那个KEY NAME本身是在内存中不存在的，那么改名后的生存时间不会发生改变</li>
+</ol>
+<p>等等~官方并没有针对各个CMD对生存时间的影响与否一一作出说明，所以这个还是要自己去试的。如果没有十足把握确认当前CMD是否会影响到KEY的生存时间，建议在写开发方案时，一定要去考证。</p>
+<p>相比之下，影响生存时间是我们需要关注的重点，只有了解了有哪些命令会影响生存时间，使用时才不会出现一脸懵X，找不到生存时间出现差异的根源~</p>
+<p>如何更新生存时间就比较简单明了了，注意几个细节即可：</p>
+<ol>
+<li>EXPIRE类操作对一个PK使用该命令，会直接设置我们所传入的值作为生存时间。对于一个VK使用该命令，会用新的值替代旧值。这就是上文背景中所提到的封装的业务set操作为何需要优先EXIST一下KEY了。这也是此次业务问题发生的根源，Redis不像LevelDB，设置了skey生存时间，后面再传入有效期，也不会刷新</li>
+<li>主键失效操作的时间复杂度是O（1），所以无需担心性能</li>
+<li>与EXPIRE类操作常见搭配的TTL，TTL是可以查看当前KEY的剩余生存时间的哦~</li>
+</ol>
+<h3 id="淘汰机制（策略）"><a href="#淘汰机制（策略）" class="headerlink" title="淘汰机制（策略）"></a>淘汰机制（策略）</h3><h4 id="最大内存"><a href="#最大内存" class="headerlink" title="最大内存"></a>最大内存</h4><p>Redis默认指定最大内存是0，即没有指定最大内存。那就是有多大内存就用多大，如果使用量超过最大内存了，那服务指定就崩了。所以一定要设置~~~~既然内存终究有耗尽的时候，此时就需要淘汰机制来维持服务的稳定运行。</p>
+<p>Redis支持用户自行配置可使用的最大内存，3种方式修改：</p>
+<ul>
+<li>动态修改（重启后失效） 服务运行期执行命令<code>config set maxmemory value</code>  </li>
+<li>动态修改并持久化到配置文件中<code>config set maxmemory value</code>，<code>config rewrite</code> </li>
+<li>修改本地配置文件（重启后生效）<code>server.maxmemory</code></li>
+</ul>
+<p>复习一下名词：VK（volatile key——设置了生存时间的key），PK（persistent key——持久化key，无生存时间）。好了，接着说！</p>
+<h4 id="6种淘汰策略"><a href="#6种淘汰策略" class="headerlink" title="6种淘汰策略"></a>6种淘汰策略</h4><ol>
+<li>volatile-lru   顾名思义，从VK集中挑选最近最少使用(LRU)的数据淘汰</li>
+<li>volatile-ttl  TTL上文中提到过它是查询剩余生存时间的，所以这种策略就是指从VK集中挑选即将要过期的数据淘汰</li>
+<li>volatile-random 不用多解释，从VK集中随机淘汰</li>
+<li>allkeys-lru  从所有数据中挑选最近最少使用的淘汰</li>
+<li>allkeys-random  从所有数据中随机淘汰</li>
+<li>no-envication  禁止淘汰，结果是怎么样的？那就是塞不进来数据了，抛出异常还是返回失败结果标识呢？自己去试试吧~</li>
+</ol>
+<p>以上6种淘汰策略都是可以在Redis中自行配置的，配置方法在此不做阐述。既然有6种可选，哪一种又是比较合适的呢？这个就是仁者见仁智者见智的事情了，一切都要以当时的业务场景来做度量，选择最合适的淘汰策略。通常有2类常见场景：</p>
+<ol>
+<li>幂等分布——通俗的说就是有热点数据，除去热点数据，其余访问率低，此时通常使用lru</li>
+<li>均等分布——所有数据访问频率差距不大，通常使用random</li>
+</ol>
+<h4 id="内部实现"><a href="#内部实现" class="headerlink" title="内部实现"></a>内部实现</h4><p>淘汰机制（策略）有2种实现方式：</p>
+<ol>
+<li>passive way  消极方法<br>当访问key时候，发现失效（生存时间为0）则删除。在GET类操作或者RANGE此类凡是读取数据的操作时，都会调用一个叫做expireIfNeeded的方法，该方法的作用就是判断该key是否已经失效，如果失效则删除。同时，方法内部会调用另一个方法propagateExpire，它是负责在删除动作发生前，将失效信息广播给AOF文件以DEL命令形式存储，还会将该信息广播给所有的Slave，同样传播的是DEL命令，通知所有Slave执行此条命令，将数据删除。所以对于Slave来说，并不需要通过主动触发消极方法来删除失效KEY，只是需要同步执行Master发出的指令即可。</li>
+<li>active way  积极方法<br>周期性的从VK集中选取一部分失效的KEY进行删除。消极方法有个缺点，若KEY一直没有被访问，那即使失效了，也不会删除。而积极方法正是为了弥补这个缺点而产生的。它利用Redis的时间事件（类似Java中的定时任务），每隔一段时间，就挂起Redis执行线程，去执行一些特殊操作，其中包括删除失效KEY。<br>（敲黑板：常有人问Redis是单线程的吗？答案：是。扩展：为什么Redis单线程还能那么快？答案：1.基本都是内存操作，你说快不快；2.单线程不存在竞争条件和上下文切换；3.非阻塞IO）<ol>
+<li>时间事件<br>时间事件有个关键的回调函数serverCron，它在Redis服务启动时创建，每秒的执行次数可配置REDIS_DEFAULT_HZ，默认每秒执行10次。该时间事件做了很多事，其中比较重要的是：<ol>
+<li>统计信息更新</li>
+<li>Client连接超时检测</li>
+<li>AOF触发</li>
+<li>BGSAVE触发</li>
+<li>失效KEY检查及删除</li>
+</ol>
+</li>
+<li>activeExpireCycle<ol>
+<li>原理：从所有数据库的expire字典中，随机抽样REDIS_EXPIRELOOKUPS_PER_CRON（默认10）个VK，检查是否已失效，并删除。如果失效个数占本次抽样个数的比例超过25%，则继续下一轮抽样检查，直到比例低于25%停止对当前数据库的操作，转向下一个数据库</li>
+<li>该函数并不会一次处理所有数据库，最多只处理REDIS_DBCRON_DBS_PER_CALL（默认16）个库，若当前存在的库总量小于设置值，或者是该函数此次执行时间超过了执行时间的限制设置（此类情况说明失效KEY过多）才会一次处理所有库</li>
+<li>该函数有执行时间限制（微秒计），有效避免该行为占用过多的系统资源。计算公式timelimit = 1000000*REDIS_EXPIRELOOKUPS_TIME_PERC/server.hz/100。其中REDIS_EXPIRELOOKUPS_TIME_PERC是单位时间内能够分配给activeExpireCycle函数执行的CPU时间比例（默认值为25），server.hz是一秒内activeExpireCycle的调用次数。</li>
+</ol>
+</li>
+</ol>
+</li>
+</ol>
+<h3 id="失效淘汰带来的性能问题"><a href="#失效淘汰带来的性能问题" class="headerlink" title="失效淘汰带来的性能问题"></a>失效淘汰带来的性能问题</h3><p>虽然定期检查淘汰的做法会因为要挂起Redis的执行线程，从而产生了一定的性能损耗。但是由于activeExpireCycle方法内部做了多处优化改进，进而大大降低了淘汰机制给系统性能带来的影响，但是如果在实际场景中发生了缓存穿透，那么也是会发生灾难性问题的。</p>
+<h4 id="何为缓存穿透"><a href="#何为缓存穿透" class="headerlink" title="何为缓存穿透"></a>何为缓存穿透</h4><p>本人在之前的工作中有一次要做一个大型营销活动，由于营销业务涉及复杂的规则计算，需要从多个业务系统中获取用于规则计算的参数，这种IO开销是很重的。为了应对这个紧急需求，开发方案选择了预热缓存，提前1周开始灌数。灌数据是由各业务方来主动触发的行为，而我们自身也没有做好严格的把控。结果大家写入的数据的失效时间都集中在某一时间段内。最后发生了什么呢？所有数据集中在0点前后失效，而活动是0点开始。服务直接血崩了~~~各种查询阻塞在缓存，之后自己的数据库压力突增和各种RPC调用超时，遇到不堪一击的上游系统，直接击垮。<br>通过我以上的白话描述，相信大家基本明白何为缓存穿透了吧~</p>
+<h4 id="如何避免缓存穿透"><a href="#如何避免缓存穿透" class="headerlink" title="如何避免缓存穿透"></a>如何避免缓存穿透</h4><ol>
+<li>缓存失效后，一定要采取限流手段或者提前做好数据库层面优化，防止数据库被击穿</li>
+<li>不同的KEY设置不同的过期时间，均匀分布，缩短执行线程被挂起的时长</li>
+<li>二级缓存（将一个可拆分的数据拆为多个小数据，分别存储）或者双缓存（A、B两套一样的缓存，A是短期失效，B是长期。这样A找不到数据了，还能去B找）</li>
+</ol>
+<h2 id="结论"><a href="#结论" class="headerlink" title="结论"></a>结论</h2><p>理想状态并不存在。所以我们暂且只能使用目前方案先上线跑一段时间，看看效果如何了。为了防止出现不可控的问题，险中求稳~那就来个开关吧！开关3种状态，仅使用LevelDB、仅使用Redis和两者同时使用（以LevelDB结果为准，Redis异常全部吃掉打日志）。</p>
+<h2 id="期望"><a href="#期望" class="headerlink" title="期望"></a>期望</h2><p>探索了Redis的主键失效机制后，依旧没有寻找的理想的解决方案，那为什么Redis不能针对Hase、List和Set这类集合结构增加一种可以一次set包含expire的操作呢？另外对于expire操作为什么不能包装一个exist?expire:don’t do expire的复合操作呢？毕竟现实场景中都是一些复合操作，如果把这些复合操作以单条命令的形式由客户端逐个发起，不但增加了IO开销，还会衍生出来一些原子性问题~</p>
+<p>当然Redis自身也有其他方式可以解决，比如说用事务或者LUA脚本都可以一次IO开销，做一系列的操作动作，甚至还可以做很多简单的逻辑计算判断等等，但是目前所处的环境是不允许使用的。原因很简单，并发太大，采用这两种方式可能会引发严重的性能问题，同时使用脚本操作，会有数据安全隐患！</p>
+<p>所以，凡事都是各有各的原因，各有各的目的，鱼和熊掌不可得兼！</p>
+
+      
+    </div>
+    
+    
+    
+
+    
+      <div>
+        <div id="wechat_subscriber" style="display: block; padding: 10px 0; margin: 20px auto; width: 100%; text-align: center">
+    <img id="wechat_subscriber_qcode" src="/uploads/wechat-qcode.jpg" alt="白十 wechat" style="width: 200px; max-width: 100%;"/>
+    <div>欢迎订阅我的微信公众号！</div>
+</div>
+
+      </div>
+    
+
+    
+
+    
+
+    <footer class="post-footer">
+      
+        <div class="post-tags">
+          
+            <a href="/tags/Redis/" rel="tag"># Redis</a>
+          
+        </div>
+      
+
+      
+      
+      
+
+      
+        <div class="post-nav">
+          <div class="post-nav-next post-nav-item">
+            
+          </div>
+
+          <span class="post-nav-divider"></span>
+
+          <div class="post-nav-prev post-nav-item">
+            
+              <a href="/2018/04/01/Cglib引发的血案——Jar包依赖冲突总结/" rel="prev" title="Cglib引发的血案——Jar包依赖冲突总结">
+                Cglib引发的血案——Jar包依赖冲突总结 <i class="fa fa-chevron-right"></i>
+              </a>
+            
+          </div>
+        </div>
+      
+
+      
+      
+    </footer>
+  </div>
+  
+  
+  
+  </article>
+
+
+
+    <div class="post-spread">
+      
+    </div>
+  </div>
+
+
+          </div>
+          
+
+
+          
+
+  
+
+
+
+        </div>
+        
+          
+  
+  <div class="sidebar-toggle">
+    <div class="sidebar-toggle-line-wrap">
+      <span class="sidebar-toggle-line sidebar-toggle-line-first"></span>
+      <span class="sidebar-toggle-line sidebar-toggle-line-middle"></span>
+      <span class="sidebar-toggle-line sidebar-toggle-line-last"></span>
+    </div>
+  </div>
+
+  <aside id="sidebar" class="sidebar">
+    
+    <div class="sidebar-inner">
+
+      
+
+      
+        <ul class="sidebar-nav motion-element">
+          <li class="sidebar-nav-toc sidebar-nav-active" data-target="post-toc-wrap">
+            文章目录
+          </li>
+          <li class="sidebar-nav-overview" data-target="site-overview-wrap">
+            站点概览
+          </li>
+        </ul>
+      
+
+      <section class="site-overview-wrap sidebar-panel">
+        <div class="site-overview">
+          <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+            
+              <p class="site-author-name" itemprop="name">白十</p>
+              <p class="site-description motion-element" itemprop="description"></p>
+          </div>
+
+          <nav class="site-state motion-element">
+
+            
+              <div class="site-state-item site-state-posts">
+              
+                <a href="/archives/">
+              
+                  <span class="site-state-item-count">4</span>
+                  <span class="site-state-item-name">日志</span>
+                </a>
+              </div>
+            
+
+            
+              
+              
+              <div class="site-state-item site-state-categories">
+                <a href="/categories/index.html">
+                  <span class="site-state-item-count">3</span>
+                  <span class="site-state-item-name">分类</span>
+                </a>
+              </div>
+            
+
+            
+              
+              
+              <div class="site-state-item site-state-tags">
+                <a href="/tags/index.html">
+                  <span class="site-state-item-count">9</span>
+                  <span class="site-state-item-name">标签</span>
+                </a>
+              </div>
+            
+
+          </nav>
+
+          
+
+          
+            <div class="links-of-author motion-element">
+                
+                  <span class="links-of-author-item">
+                    <a href="https://github.com/sunyinjie" target="_blank" title="GitHub">
+                      
+                        <i class="fa fa-fw fa-github"></i>GitHub</a>
+                  </span>
+                
+                  <span class="links-of-author-item">
+                    <a href="mailto:sunyinjie@gmail.com" target="_blank" title="E-Mail">
+                      
+                        <i class="fa fa-fw fa-envelope"></i>E-Mail</a>
+                  </span>
+                
+            </div>
+          
+
+          
+          
+
+          
+          
+
+          
+
+        </div>
+      </section>
+
+      
+      <!--noindex-->
+        <section class="post-toc-wrap motion-element sidebar-panel sidebar-panel-active">
+          <div class="post-toc">
+
+            
+              
+            
+
+            
+              <div class="post-toc-content"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#背景"><span class="nav-number">1.</span> <span class="nav-text">背景</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#问题"><span class="nav-number">2.</span> <span class="nav-text">问题</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#迁移方案——Redis"><span class="nav-number">3.</span> <span class="nav-text">迁移方案——Redis</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#优势"><span class="nav-number">3.1.</span> <span class="nav-text">优势</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#缺陷"><span class="nav-number">3.2.</span> <span class="nav-text">缺陷</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#方案"><span class="nav-number">3.3.</span> <span class="nav-text">方案</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#确认数据结构"><span class="nav-number">3.3.1.</span> <span class="nav-text">确认数据结构</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#API"><span class="nav-number">3.3.2.</span> <span class="nav-text">API</span></a></li></ol></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#引发的问题"><span class="nav-number">4.</span> <span class="nav-text">引发的问题</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#求医问药"><span class="nav-number">5.</span> <span class="nav-text">求医问药</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#主键失效机制"><span class="nav-number">5.1.</span> <span class="nav-text">主键失效机制</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#生存时间"><span class="nav-number">5.1.1.</span> <span class="nav-text">生存时间</span></a></li></ol></li><li class="nav-item nav-level-3"><a class="nav-link" href="#淘汰机制（策略）"><span class="nav-number">5.2.</span> <span class="nav-text">淘汰机制（策略）</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#最大内存"><span class="nav-number">5.2.1.</span> <span class="nav-text">最大内存</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#6种淘汰策略"><span class="nav-number">5.2.2.</span> <span class="nav-text">6种淘汰策略</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#内部实现"><span class="nav-number">5.2.3.</span> <span class="nav-text">内部实现</span></a></li></ol></li><li class="nav-item nav-level-3"><a class="nav-link" href="#失效淘汰带来的性能问题"><span class="nav-number">5.3.</span> <span class="nav-text">失效淘汰带来的性能问题</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#何为缓存穿透"><span class="nav-number">5.3.1.</span> <span class="nav-text">何为缓存穿透</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#如何避免缓存穿透"><span class="nav-number">5.3.2.</span> <span class="nav-text">如何避免缓存穿透</span></a></li></ol></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#结论"><span class="nav-number">6.</span> <span class="nav-text">结论</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#期望"><span class="nav-number">7.</span> <span class="nav-text">期望</span></a></li></ol></div>
+            
+
+          </div>
+        </section>
+      <!--/noindex-->
+      
+
+      
+
+    </div>
+  </aside>
+
+
+        
+      </div>
+    </main>
+
+    <footer id="footer" class="footer">
+      <div class="footer-inner">
+        <div class="copyright">&copy; <span itemprop="copyrightYear">2018</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">白十</span>
+
+  
+</div>
+
+
+  <div class="powered-by">由 <a class="theme-link" target="_blank" href="https://hexo.io">Hexo</a> 强力驱动</div>
+
+
+
+  <span class="post-meta-divider">|</span>
+
+
+
+  <div class="theme-info">主题 &mdash; <a class="theme-link" target="_blank" href="https://github.com/iissnan/hexo-theme-next">NexT.Gemini</a> v5.1.4</div>
+
+
+
+
+        
+
+
+
+
+
+
+
+        
+      </div>
+    </footer>
+
+    
+      <div class="back-to-top">
+        <i class="fa fa-arrow-up"></i>
+        
+      </div>
+    
+
+    
+
+  </div>
+
+  
+
+<script type="text/javascript">
+  if (Object.prototype.toString.call(window.Promise) !== '[object Function]') {
+    window.Promise = null;
+  }
+</script>
+
+
+
+
+
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+  
+  
+    <script type="text/javascript" src="/lib/jquery/index.js?v=2.1.3"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/fastclick/lib/fastclick.min.js?v=1.0.6"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/jquery_lazyload/jquery.lazyload.js?v=1.9.7"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/velocity/velocity.min.js?v=1.2.1"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/velocity/velocity.ui.min.js?v=1.2.1"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/fancybox/source/jquery.fancybox.pack.js?v=2.1.5"></script>
+  
+
+
+  
+
+
+  <script type="text/javascript" src="/js/src/utils.js?v=5.1.4"></script>
+
+  <script type="text/javascript" src="/js/src/motion.js?v=5.1.4"></script>
+
+
+
+  
+  
+
+
+  <script type="text/javascript" src="/js/src/affix.js?v=5.1.4"></script>
+
+  <script type="text/javascript" src="/js/src/schemes/pisces.js?v=5.1.4"></script>
+
+
+
+  
+  <script type="text/javascript" src="/js/src/scrollspy.js?v=5.1.4"></script>
+<script type="text/javascript" src="/js/src/post-details.js?v=5.1.4"></script>
+
+
+
+  
+
+
+  <script type="text/javascript" src="/js/src/bootstrap.js?v=5.1.4"></script>
+
+
+
+  
+
+
+  
+
+
+
+
+	
+
+
+
+
+
+  
+
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+
+
+
+
+  
+
+  
+
+  
+
+  
+  
+
+  
+
+  
+
+  
+
+</body>
+</html>
