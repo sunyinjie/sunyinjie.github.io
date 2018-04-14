@@ -6,10 +6,6 @@ branches:
 before_install:
 - openssl aes-256-cbc -K $encrypted_d3e7e74a3f55_key -iv $encrypted_d3e7e74a3f55_iv
   -in id_rsa_github.enc -out id_rsa_github -d
-- chmod 600 ~/.ssh/id_rsa_github
-- eval ${ssh-agent)
-- ssh-add ~/.ssh/id_rsa_github
-- cp .travis/ssh_config ~/.ssh/config
 - export TZ='Asia/Shanghai'
 - npm install -g hexo
 - npm install -g hexo-cli
