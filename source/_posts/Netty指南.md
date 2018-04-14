@@ -12,7 +12,7 @@ tags:
 ---
 
 # 基础篇
-1. [Java IO演变](/Netty指南——Java_IO演变/index.html)
+1. [Java IO演变](/2018/04/15/Netty指南——Java_IO演变/index.html)
 2. BIO与伪异步IO
 3. NIO
 4. AIO
