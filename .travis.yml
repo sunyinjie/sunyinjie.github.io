@@ -27,6 +27,7 @@ before_install:
 install:
  - npm install hexo-cli -g
  - npm install
+ - npm install hexo-generator-index-pin-top --save
 
 # 执行命令脚本
 script:
