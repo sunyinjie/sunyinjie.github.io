@@ -1,28 +1,34 @@
-language: node_js
+# 使用的nodejs版本
 node_js: stable
+
+# 仓库的分支
 branches:
   only:
   - dev
+
+# 执行isntall前需要执行的命令
 before_install:
-- openssl aes-256-cbc -K $encrypted_d3e7e74a3f55_key -iv $encrypted_d3e7e74a3f55_iv
-  -in id_rsa_github.enc -out id_rsa_github -d
-- export TZ='Asia/Shanghai'
-- npm install -g hexo
-- npm install -g hexo-cli
-before_script:
-- git config --global user.name "sunyinjie"
-- git config --global user.email sunyinjie@gmail.com
-- sed -i'' "s~git@github.com:github.com/sunyinjie/sunyinjie.github.io.git~https://${REPO_TOKEN}:x-oauth-basic@github.com/sunyinjie/sunyinjie.github.io.git~"
-  _config.yml
+# 配置解密信息
+ - openssl aes-256-cbc -K $encrypted_d3e7e74a3f55_key -iv $encrypted_d3e7e74a3f55_iv -in .travis/id_rsa_github.enc -out ~/.ssh/id_rsa_github -d
+
+# 改变文件权限
+ - chmod 600 ~/.ssh/id_rsa_github
+
+# 配置 ssh
+ - eval $(ssh-agent)
+ - ssh-add ~/.ssh/id_rsa_github
+ - cp .travis/ssh_config ~/.ssh/config
+
+# 配置git 的个人信息
+ - git config --global user.name 'sunyinjie'
+ - git config --global user.email sunyinjie@gmail.com
+
+# 执行install
 install:
-- npm install
+ - npm install hexo-cli -g
+ - npm install
+
+# 执行命令脚本
 script:
-- hexo clean
-- hexo generate
-after_success:
-- hexo deploy
-env:
-  global:
-  - secure: A4EGjX1je8wcf4Oj5fLR9snaO4z3wj4vTl3ZFb9xCwMC/i8WEv1euXbL77GaFMAf+24WQfhv6fYx6jPF0cPDMALDtz/dpx/kJFFvRiGQAKUFrBOgzVEwThr5DiIFITdGM+cq4YB69GWFKf5kH3GFHw1bAsCQXAy6vdTEx/2YmhVabEWDJSq/UKcpholyKVahnXCes/Bmzil9BoT116sASyQfkzycgdCKtcHJExYOIzj6dHqGeBGVemOV8YnJpnP8HoMgeJ3GLnnp95HvwNIRTWWhujMqL81XfgDHVhkDmf3H2hcDh4eiL8eMFoi83Z5AE4cvo0B/7NRLDvDZurBDw6QUA9tdr8cHEqbpaAmBNYB+V0howTkHn9qju0npBHbOx/q7Lx5Q3yPK86uPhJQ9fOsiX4EJXeV7ltQEKSDFE6gRDdwfQ1LneVmuEdF5sNQiuTGIb7dGk9Vo4xrZZeSugBB7BVm5Q7UyPobQn/8EOO4Ky64huxB6ls4aR1r3LeLhGiJdElDdYRBcFOaDZBJO8XkpCMgNyCrqM7Yhgzpd1BRF+uqXwnnj67ldP9N9yTnyEBTmqlcdIPcZqxJiKx8I2yoxFrkcErIZ+wQjf0QENkf174JOs93Zn3tuVE2m4lz4sViAp24XIBJgD49pNugJouraSs6mIlD89VCzIIjZ62E=
-  - secure: C3eXs5WHl1zALZoL/Ul7E3SjZuyKPt2IT2souxZ+5vrdrGO5Y+rb3CjDgYY+wjrud8B0IE2Q6aC7yqfSv+TqpOZwh0Lzm3Hu1Q3cks5+njOCQ9UL9V+HFHBS5AgKl55f3Qlruk9G4A2F4RXqLnL11PYzXxFgZrbJaOZvb5k0aKpN781uuTML3zM0rG1WugVlkhBnETdWnUcF7Ah6XPntY1OzDfRcuzkUz0cWSFW00I0qcjdcVv82KjOAkURne0puyx4MWKF4qVn55qFGYal5xkNf/H3Vscw0qz09j9N8U9gM3x+5UO/1tPfxWeq/+7LO29PH1Ym15EWzddvUv8TWa1cSFRXXrDosG+Xz2FZbb7CLtZEXTgE0+OmAy5kBTEfC5/Rr9naMwkuyYySVMeGd+g8RjdA6WAMVXZVy1vA/tTqBEN+aDRmN6CtT94+2JyB5kL810R4lKtnDw7CQR6PhsWnV/t+o0jOObUWZSKrP7bDMiiTMrBK3oE+1lpoOGXU8f1w6MZoP8kCQ8q1C5yTi0cLIXx2VP752S3lqZo69k2vsq0rAlhSiIbRAbf8hW1NZ5G6La2FBaX29nIG3IebJJHrHJX2vd155BbrLXgCPsVnGOtj2Qopy+mvT+RigINwI+Zo/wNO5hO36IV0Tq2J6goMmr3sCkCAVTHAwM04OSXk=
-  - secure: h9oI2jIwGOrxo5ruVo9m5XubxWVcIijtw71TKPPgnYknD5wmM1ZPUHx+V29U9uFtXjeUz6ym9z98GhbwdabtlX6DtzgJJzKQsNTgG1r+3jErJDR9WTIT87CSs/U9FojzE7VOPd4ZN3CobgUcx8Fvf+h7j93jcI7MA7eNwahp4eumKmkZZLYexvPpxECmYRhMrWhyQ48LhhOoagSFMAAHZt9PL/re7Ldh2bwU6PhdpN6mqttRRAh9s6vQTdFncVrAWqKJKnCiJ8vHHyEp9o68Jq1D3SDzHrpsi1UhYxvALl8ksNnDgLpBD1hiwZMvzblBzIGI2ywTd4AFEDU3Dppv61RuRpRJ3syyscFZYf8O+aOFEbPn6AfyWm4L1CLh5yIctPEbAmANxFof64jVWpUOO2UuHH9wUslHu30keYBGG6MKWD3u2hvTNbNrZj5PgaazDTfJBrXPnf/+gLSP8NXmlPjgNRQdMTXsWThGUaKI4bLdTsnr9MRt9xzJGRps8GTwdu7nj+HcNeb3Z6828zpu6RYPD9RuT2QfXHG0cd2OTN1pMai2autt11Y2oDpQKS5mwkV8WcxOn3iCl1ej2eLc6iIbS50onjlZoEd23/oO9G0ylmhnq8emRY9Lwqagf90hYQuDTS7vZ/VZGXD14bGM1e1af8iCO6H33dQ0y7U3P1I=
+ - hexo clean
+ - hexo g -d
